@@ -38,15 +38,19 @@ impl <'a> Mode<'a, I2C> {
     }
 
     pub fn start_bit(&mut self) {
+        println!("i2c start");
         self.send_byte(0x2);
     }
     pub fn stop_bit(&mut self) {
+        println!("i2c stop");
         self.send_byte(0x3);
     }
     pub fn ack(&mut self) {
+        println!("i2c ack");
         self.send_byte(0x6);
     }
     pub fn nack(&mut self) {
+        println!("i2c nack");
         self.send_byte(0x7);
     }
     pub fn configure(&mut self, config: Config<I2C>) {
@@ -87,7 +91,40 @@ impl <'a> Mode<'a, I2C> {
     }
 
     pub fn send_cmd_then_read(&mut self, to_write: &[u8], read_len: usize) -> Vec<u8> {
-        unimplemented!()
+        if to_write.len() > 4096 {
+            let _ = self.send_cmd_then_read(&to_write[..4096], 0);
+            return self.send_cmd_then_read(&to_write[4096..], read_len);
+        }
+        if read_len > 4096 {
+            let mut ret = self.send_cmd_then_read(to_write, 4096);
+            ret.extend_from_slice(&self.send_cmd_then_read(&[], read_len - 4096));
+            return ret;
+        }
+
+        flush_buffer(&mut self.port);
+
+        self.send_byte(0x08);
+
+        let high_write = (to_write.len() >> 8) as u8;
+        let low_write = (to_write.len() & 0x0ff) as u8;
+        self.send_byte(high_write);
+        self.send_byte(low_write);
+
+        let high_read = (read_len >> 8) as u8;
+        let low_read = (read_len & 0x0ff) as u8;
+        self.send_byte(high_read);
+        self.send_byte(low_read);
+
+        self.port.write(to_write).unwrap();
+        let mut cmd_check = [0x00];
+        let mut ret = vec![0u8; read_len];
+
+        let rlen_cmd = self.port.read(&mut cmd_check).unwrap();
+        let rlen_ret = self.port.read(ret.as_mut_slice()).unwrap();
+        if rlen_cmd != 1 || cmd_check[0] != 0x01  || rlen_ret != read_len {
+            panic!("i2c write then read command failed, resp: {:?}", &ret);
+        }
+        ret
     }
 }
 
