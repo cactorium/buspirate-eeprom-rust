@@ -90,14 +90,14 @@ impl <'a> Mode<'a, I2C> {
         buf[0]
     }
 
-    pub fn send_cmd_then_read(&mut self, to_write: &[u8], read_len: usize) -> Vec<u8> {
+    pub fn write_then_read(&mut self, to_write: &[u8], read_len: usize) -> Vec<u8> {
         if to_write.len() > 4096 {
-            let _ = self.send_cmd_then_read(&to_write[..4096], 0);
-            return self.send_cmd_then_read(&to_write[4096..], read_len);
+            let _ = self.write_then_read(&to_write[..4096], 0);
+            return self.write_then_read(&to_write[4096..], read_len);
         }
         if read_len > 4096 {
-            let mut ret = self.send_cmd_then_read(to_write, 4096);
-            ret.extend_from_slice(&self.send_cmd_then_read(&[], read_len - 4096));
+            let mut ret = self.write_then_read(to_write, 4096);
+            ret.extend_from_slice(&self.write_then_read(&[], read_len - 4096));
             return ret;
         }
 
@@ -130,12 +130,17 @@ impl <'a> Mode<'a, I2C> {
     // helper functions
 }
 
-impl <'a> EepromReader for Mode<'a, I2C> {
-    fn read_eeprom(&mut self) -> Vec<u8> {
-        unimplemented!()
+impl <'a> Eeprom for Mode<'a, I2C> {
+    fn read_eeprom(&mut self, addr: u8, len: usize) -> Vec<u8> {
+        self.start_bit();
+        self.bulk_write(&[addr << 1, 0x00]);
+        self.start_bit();
+        let mut ret = self.write_then_read(&[(addr << 1) | 1], len);
+        self.stop_bit();
+        ret
     }
 
-    fn write_eeprom(&mut self, to_write: &[u8], page_sz: usize) {
+    fn write_eeprom(&mut self, addr: u8, to_write: &[u8], page_sz: usize) {
         unimplemented!()
     }
 }
