@@ -24,6 +24,11 @@ pub struct Config<T> {
     _ty: PhantomData<T>,
 }
 
+pub trait EepromReader {
+    fn read_eeprom(&mut self) -> Vec<u8>;
+    fn write_eeprom(&mut self, &[u8], page_sz: usize);
+}
+
 impl Deref for BitBangMode {
     type Target = SystemPort;
     fn deref(&self) -> &SystemPort {

@@ -126,6 +126,16 @@ impl <'a> Mode<'a, I2C> {
         }
         ret
     }
+
+    // helper functions
 }
 
+impl <'a> EepromReader for Mode<'a, I2C> {
+    fn read_eeprom(&mut self) -> Vec<u8> {
+        unimplemented!()
+    }
 
+    fn write_eeprom(&mut self, to_write: &[u8], page_sz: usize) {
+        unimplemented!()
+    }
+}
