@@ -6,9 +6,16 @@ use super::delays::*;
 
 pub struct I2C;
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Ack {
     Ack,
     Nack,
+}
+
+impl Ack {
+    pub fn is_ack(&self) -> bool {
+        *self == Ack::Ack
+    }
 }
 
 impl <'a> Mode<'a, I2C> {
@@ -33,7 +40,7 @@ impl <'a> Mode<'a, I2C> {
         self.port.write(&[b]).unwrap();
         let rlen = self.port.read(&mut buf).unwrap();
         if rlen != 1 || buf[0] != 0x01 {
-            panic!("start bit send failed!");
+            panic!("i2c command send failed!");
         }
     }
 
@@ -133,6 +140,7 @@ impl <'a> Mode<'a, I2C> {
 impl <'a> Eeprom for Mode<'a, I2C> {
     fn read_eeprom(&mut self, addr: u8, len: usize) -> Vec<u8> {
         self.start_bit();
+        // dummy write to set the addr to zero
         self.bulk_write(&[addr << 1, 0x00]);
         self.start_bit();
         let mut ret = self.write_then_read(&[(addr << 1) | 1], len);
@@ -140,7 +148,28 @@ impl <'a> Eeprom for Mode<'a, I2C> {
         ret
     }
 
+    // NOTE: doesn't work for 1-Kbit memory
     fn write_eeprom(&mut self, addr: u8, to_write: &[u8], page_sz: usize) {
-        unimplemented!()
+        let mut mem_addr = 0u8;
+        for page in to_write.chunks(page_sz) {
+            self.start_bit();
+            let header_acks = self.bulk_write(&[addr << 1, mem_addr]);
+            let write_acks = self.bulk_write(page);
+            self.stop_bit();
+
+            if !header_acks.iter().all(|x| x.is_ack()) || !write_acks.iter().all(|x| x.is_ack()) {
+                panic!("i2c device refused eeprom write, resps {:?} {:?}", &header_acks, &write_acks);
+            }
+
+            mem_addr += page.len() as u8;
+
+            // poll for the end of the page write
+            let mut ack_failed = true;
+            while ack_failed {
+                self.start_bit();
+                let ack = self.bulk_write(&[addr << 1]);
+                ack_failed = !ack.iter().all(|x| x.is_ack());
+            }
+        }
     }
 }
