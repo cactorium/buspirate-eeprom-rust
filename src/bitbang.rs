@@ -18,6 +18,12 @@ pub struct Mode<'a, T> {
     pub _ty: PhantomData<T>,
 }
 
+#[derive(Clone, Copy)]
+pub struct Config<T> {
+    pub bits: u8,
+    _ty: PhantomData<T>,
+}
+
 impl Deref for BitBangMode {
     type Target = SystemPort;
     fn deref(&self) -> &SystemPort {
@@ -42,7 +48,44 @@ impl <'a, T> Drop for Mode<'a, T> {
     }
 }
 
-pub fn clear_buf(port: &mut SystemPort) {
+impl <T> Config<T> {
+    pub fn new() -> Config<T> {
+        Config {
+            bits: 0,
+            _ty: PhantomData,
+        }
+    }
+    pub fn power_on(self) -> Config<T> {
+        Config { bits: self.bits | 0x08, _ty: PhantomData, }
+    }
+    pub fn power_off(self) -> Config<T> {
+        Config { bits: self.bits & !0x08, _ty: PhantomData, }
+    }
+    pub fn pullup_on(self) -> Config<T> {
+        Config { bits: self.bits | 0x04, _ty: PhantomData, }
+    }
+    pub fn pullup_off(self) -> Config<T> {
+        Config { bits: self.bits & !0x04, _ty: PhantomData, }
+    }
+    pub fn aux_on(self) -> Config<T> {
+        Config { bits: self.bits | 0x02, _ty: PhantomData, }
+    }
+    pub fn aux_off(self) -> Config<T> {
+        Config { bits: self.bits & !0x02, _ty: PhantomData, }
+    }
+    pub fn cs_on(self) -> Config<T> {
+        Config { bits: self.bits | 0x01, _ty: PhantomData, }
+    }
+    pub fn cs_off(self) -> Config<T> {
+        Config { bits: self.bits & !0x01, _ty: PhantomData, }
+    }
+
+    pub fn to_byte(self) -> u8 {
+        self.bits
+    }
+}
+
+pub fn flush_buffer(port: &mut SystemPort) {
     let mut buf = [0u8; 16];
     let mut rlen = port.read(&mut buf).ok().unwrap_or_else(|| 0);
     println!("buffer flushed with {:?}", &buf[0..rlen]);
@@ -57,7 +100,7 @@ pub fn enter_bitbang_mode(mut port: SystemPort) -> BitBangMode {
     let mut rlen = 0;
     let mut count = 0;
     // empty the buffer
-    clear_buf(&mut port);
+    flush_buffer(&mut port);
 
     while &buf[0..rlen] != b"BBIO1" && count < 25 {
         port.write(&[0x00]).unwrap();
@@ -74,7 +117,7 @@ pub fn enter_bitbang_mode(mut port: SystemPort) -> BitBangMode {
 pub fn poweron(port: &mut SystemPort) -> u8 {
     let mut buf = [0u8; 16];
 
-    clear_buf(port);
+    flush_buffer(port);
     port.write(&[0xc0]).unwrap();
     sleep(RESP_DELAY_SHORT.clone());
     let len = port.read(&mut buf).ok().unwrap_or_else(|| 0);
@@ -86,7 +129,7 @@ pub fn poweron(port: &mut SystemPort) -> u8 {
 }
 
 fn reset_to_bitbang(port: &mut SystemPort) {
-    clear_buf(port);
+    flush_buffer(port);
     println!("reseting to bitbang..");
     port.write(&[0x00]).unwrap();
     sleep(RESP_DELAY_LONG.clone());
@@ -99,7 +142,7 @@ fn reset_to_bitbang(port: &mut SystemPort) {
 }
 
 fn reset_buspirate(port: &mut SystemPort) {
-    clear_buf(port);
+    flush_buffer(port);
     println!("reseting bus pirate..");
     port.write(&[0x0f]).unwrap();
     sleep(RESP_DELAY_LONG.clone());

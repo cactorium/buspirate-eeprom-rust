@@ -82,7 +82,7 @@ impl <'a> Mode<'a, OneWire> {
         let mut len_sent = 0;
         let mut byte_iter = msg.iter();
 
-        clear_buf(self.port);
+        flush_buffer(self.port);
 
         while len_sent < total_len {
             let bulk_len = if (total_len - len_sent) > 4 { 4 } else { total_len - len_sent };
